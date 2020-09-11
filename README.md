@@ -15,9 +15,10 @@ TODO : coming soon
 
 TODO : to be organized
 
-- code     : core , utils, notebooks containing `.py` files and `.ipynb` notebooks
-- lib      : pre-constructed dictionary
-- resource : data, screenshots and other resources
+- source     : contains the main `.py` file for the classifier
+- notebook   : contains `.ipynb` notebooks for practice
+- data       : contains the dataset
+
 
 
 ## Data source :
