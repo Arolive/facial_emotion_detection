@@ -31,4 +31,4 @@ def  aithon_level2_api(traingcsv, testcsv):
     return cls.test_the_model(model, testcsv)
 
 if __name__ == '__main__':
-    aithon_lebel2_api(traincsv, testcsv)
+    aithon_level2_api(traincsv, testcsv)

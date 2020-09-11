@@ -293,29 +293,39 @@ class VGGNET(nn.Module):
         return predicted_labels
 
 
-##--- core functions ---
+##--- Data loading ---
 
-def train_a_model(trainfile):
-
+def get_data(data_path):
+    
     ## Loading images
-    images, target = loader(trainfile)
+    images, target = loader(data_path)
     ## Train test split
     train_X, test_X, train_Y, test_Y = data_split(images, target, test_size = 0.3)
     ## Train loader
     trainloader = create_batch(train_X, train_Y, batch_size = BATCHSIZE)
     ## Test loader
     testloader = create_batch(test_X, test_Y, batch_size = BATCHSIZE)
-    
-    # Defining models
-    model_XGB = XGBClassifier(max_depth = 3000)
-    model_XGB.fit(train_X, train_Y)
 
-    return model_XGB
+    return trainloader, testloader
+
+
+##--- core functions ---
+
+def train_a_model(trainfile):
+
+    trainloader, testloader = get_data(trainfile)
+    # Defining models
+    model_vgg = VGGNET()
+    #model_vgg = model_vgg.to(device)
+
+    model_vgg.train(trainloader, valdata = testloader, numberEpoch = 25, DEBUG = True)
+    return model_vgg
   
 def test_the_model(model, testfile):
 
+    _, testloader = get_data(testfile)
     ## XGB
-    prediction_xgb = model.predict(test_X)
+    prediction = model.predict(testloader)
     
-    return prediction_xgb
+    return prediction
 
