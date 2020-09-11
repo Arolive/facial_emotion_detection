@@ -8,8 +8,14 @@
 - Clone the reposiory and *cd* into `code`
 
 Syntax:
+```
+python aithon_level2.py <train_file_path> <test_file_path>
+```
 
-TODO : coming soon
+Example:
+```
+python aithon_level2.py data/aithon2020_level2_traning.csv data/aithon2020_level2_testing.csv
+```
 
 ## Directory layout
 
