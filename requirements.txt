@@ -1,0 +1,15 @@
+
+#
+# add Python library if it is not in the list
+# Numpy
+# Pandas
+# OpneCV for Python
+# TensorFlows
+# Keras
+# PyTorch
+# Scikit-learn
+# Theano
+# Matplotlib
+#
+#
+
