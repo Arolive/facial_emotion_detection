@@ -7,8 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)) + '/source/')
 
 import source.classification  as cls
 
-
-
+traincsv, testcsv = sys.argv[1], sys.argv[2]
 
 '''
 The following function will be called to train and test your model.
@@ -30,3 +29,6 @@ def  aithon_level2_api(traingcsv, testcsv):
     # Test that model with test data
     # And return predicted emotions in a list
     return cls.test_the_model(model, testcsv)
+
+if __name__ == '__main__':
+    aithon_lebel2_api(traincsv, testcsv)
