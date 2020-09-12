@@ -13,7 +13,7 @@ python aithon_level2.py <train_file_path> <test_file_path>
 
 Example:
 ```
-python aithon_level2.py data/aithon2020_level2_traning.csv data/aithon2020_level2_testing.csv
+python aithon_level2.py data/aithon2020_level2_traning.csv data/aithon2020_level2_training.csv
 ```
 
 ## Directory layout
