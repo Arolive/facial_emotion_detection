@@ -3,7 +3,8 @@
 import time
 import numpy as np
 import pandas as pd
-from tqdm.notebook import tqdm
+from tqdm import tqdm
+
 
 ##--- Pytorch imports ----
 
@@ -119,10 +120,10 @@ class RESNET(nn.Module):
             if not DEBUG:
                 pbar = enumerate(traindata, 0)
             for count, data in pbar:
-                inputs, labels = data[0].to(device), data[1].to(device)
+                inputs, labels = data[0], data[1]
+                inputs = inputs.type(torch.FloatTensor)
+                inputs, labels = inputs.to(device), labels.to(device)
                 batch  = inputs.shape[0]
-                inputs = inputs.type(torch.cuda.FloatTensor)
-
                 ## zero the parameter gradients
                 self.optimizer.zero_grad()
 
@@ -154,9 +155,10 @@ class RESNET(nn.Module):
         running_loss     = 0.0
         testlen = sum(list(batch[0].shape[0] for batch in testdata))
         for data in testdata:
-            inputs, labels = data[0].to(device), data[1].to(device)
+            inputs, labels = data[0], data[1]
+            inputs = inputs.type(torch.FloatTensor)
+            inputs, labels = inputs.to(device), labels.to(device)
             batch  = inputs.shape[0]
-            inputs = inputs.type(torch.cuda.FloatTensor)
             ## Forward
             outputs = self.forward(inputs)
             _, preds = torch.max(outputs, 1)
@@ -172,9 +174,10 @@ class RESNET(nn.Module):
     def predict(self, testdata, ID = None):
         predicted_labels = []
         for data in testdata:
-            inputs, labels = data[0].to(device), data[1].to(device)
+            inputs, labels = data[0], data[1]
+            inputs = inputs.type(torch.FloatTensor)
+            inputs, labels = inputs.to(device), labels.to(device)
             batch  = inputs.shape[0]
-            inputs = inputs.type(torch.cuda.FloatTensor)
             ## Forward
             outputs = self.forward(inputs)
             _, preds = torch.max(outputs, 1)
@@ -219,7 +222,7 @@ class VGGNET(nn.Module):
         trainlen = sum(list(batch[0].shape[0] for batch in traindata))
         total_batch = len(traindata)
         ## Loop over the dataset multiple times
-        for epoch in range(numberEpoch):
+        for epoch in tqdm(range(numberEpoch)):
             running_corrects = 0.0
             running_loss     = 0.0
             if DEBUG:
@@ -227,10 +230,10 @@ class VGGNET(nn.Module):
             else:
                 pbar = enumerate(traindata, 0)
             for count, data in pbar:
-                inputs, labels = data[0].to(device), data[1].to(device)
+                inputs, labels = data[0], data[1]
+                inputs = inputs.type(torch.FloatTensor)
+                inputs, labels = inputs.to(device), labels.to(device)
                 batch  = inputs.shape[0]
-                inputs = inputs.type(torch.cuda.FloatTensor)
-
                 ## zero the parameter gradients
                 self.optimizer.zero_grad()
 
@@ -263,9 +266,10 @@ class VGGNET(nn.Module):
         testlen = sum(list(batch[0].shape[0] for batch in testdata))
         with torch.no_grad():
             for data in testdata:
-                inputs, labels = data[0].to(device), data[1].to(device)
+                inputs, labels = data[0], data[1]
+                inputs = inputs.type(torch.FloatTensor)
+                inputs, labels = inputs.to(device), labels.to(device)
                 batch  = inputs.shape[0]
-                inputs = inputs.type(torch.cuda.FloatTensor)
                 ## Forward
                 outputs = self.forward(inputs)
                 _, preds = torch.max(outputs, 1)
@@ -281,9 +285,10 @@ class VGGNET(nn.Module):
     def predict(self, testdata, ID = None):
         predicted_labels = []
         for data in testdata:
-            inputs, labels = data[0].to(device), data[1].to(device)
-            batch  = inputs.shape[0]
-            inputs = inputs.type(torch.cuda.FloatTensor)
+            inputs, labels = data[0], data[1]
+            inputs = inputs.type(torch.FloatTensor)
+            inputs, labels = inputs.to(device), labels.to(device)
+            batch  = inputs.shape[0]           
             ## Forward
             outputs = self.forward(inputs)
             _, preds = torch.max(outputs, 1)
@@ -316,9 +321,9 @@ def train_a_model(trainfile):
     trainloader, testloader = get_data(trainfile)
     # Defining models
     model_vgg = VGGNET()
-    #model_vgg = model_vgg.to(device)
+    model_vgg = model_vgg.to(device)
 
-    model_vgg.train(trainloader, valdata = testloader, numberEpoch = 25, DEBUG = True)
+    model_vgg.train(trainloader, valdata = testloader, numberEpoch = 25, DEBUG = False)
     return model_vgg
   
 def test_the_model(model, testfile):
