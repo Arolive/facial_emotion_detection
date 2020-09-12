@@ -154,4 +154,4 @@ def test_the_model(model, testfile):
     
     final_prediction = [convert_reverse[np.argmax(x)] for x in prediction]
     
-    return prediction
+    return final_prediction
