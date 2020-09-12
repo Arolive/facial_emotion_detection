@@ -29,7 +29,3 @@ def  aithon_level2_api(traingcsv, testcsv):
     # And return predicted emotions in a list
     return cls.test_the_model(model, testcsv)
 
-if __name__ == '__main__':
-
-    traincsv, testcsv = sys.argv[1], sys.argv[2]
-    print(aithon_level2_api(traincsv, testcsv))
