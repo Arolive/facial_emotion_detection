@@ -139,8 +139,8 @@ def train_a_model(trainfile):
 
     
     history = model.fit(X, y,
-              batch_size=batch_size,
-              epochs=epochs,
+              batch_size=64,
+              epochs=50,
               shuffle=True, verbose = 2, callbacks=[rlr])
 
     return model
