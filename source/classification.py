@@ -1,336 +1,157 @@
-##--- basic imports ---
+##--- Basic imports ---
 
-import time
-import numpy as np
+import cv2
 import pandas as pd
-from tqdm import tqdm
+import numpy as np
+import random
+import matplotlib.pyplot as plt
 
-
-##--- Pytorch imports ----
-
-import torch
-# nn
-import torch.nn as nn
-import torch.nn.functional as F
-# optim
-import torch.optim as optim
-from torch.optim import lr_scheduler
-# utils
-from torch.utils.data import random_split
-from torch.utils.data.dataset import Dataset
-# torchvision
-import torchvision
-from torchvision import datasets, models, transforms
-
-##--- Other imports ---
-
-from xgboost import XGBClassifier
-from sklearn.metrics import accuracy_score
+from tensorflow import keras
+from tensorflow.keras.applications.vgg16 import VGG16
+from tensorflow.keras.applications.vgg19 import VGG19
+from tensorflow.keras.models import load_model
+from tensorflow.keras import utils
+from tensorflow.keras.models import Sequential, Model
+from tensorflow.keras.layers import Dense, Dropout, Flatten, Conv2D, MaxPool2D, GlobalAveragePooling2D
+from tensorflow.keras.layers import BatchNormalization
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from sklearn.model_selection import train_test_split
 
 
-##--- Lib ---
+##--- Global variables ---
 
-cls2id = {"Happy": 0, "Sad": 1, "Fear": 2}
-id2cls = ["Happy", "Sad", "Fear"]
-
-BATCHSIZE = 10
-#PATH = "../data/aithon2020_level2_traning.csv"
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+convert_array = {'Happy' : 0,'Sad' : 1,'Fear' : 2 }
+convert_reverse = {0 : 'Happy', 1 : 'Sad', 2 : 'Fear'}
 
 
+##-- preprocessing ---
 
-##--- Utility functions ---
-
-def load_data(PATH):
-    data     = pd.read_csv(PATH)
-    try:
-        labels   = data["emotion"]
-        data     = data.drop(["emotion"], axis = 1)
-    except:
-        labels = None
-    images   = np.array(data.values).reshape(len(data.values), 48, 48)
-    images   = images/255
-    return images, labels
-
-def loader(PATH):
-    images, labels = load_data(PATH)
-    images = torch.tensor(images)
-    images = images.view(images.shape[0], -1, images.shape[1], images.shape[2])
-
-    if labels is not None:
-        target = []
-        for label in labels.values:
-            target.append(cls2id[label])
-        target = torch.tensor(target)
-    else:
-        target = None
-
-    return images, target
-
-def data_split(X, Y, test_size, shuffle = True):
-    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size = test_size, shuffle = shuffle)
-    return(X_train, X_test, Y_train, Y_test)
-
-def create_batch(X, Y, batch_size = 1):
-    batch_x = [X[i: i + batch_size] for i in range(0, len(X), batch_size)]
-    batch_y = [Y[i: i + batch_size] for i in range(0, len(Y), batch_size)]
-    return list(zip(batch_x, batch_y))
-
-
-##--- RESNET Model ---
-
-class RESNET(nn.Module):
-    def __init__(self, criterion = None, optimizer = None, learning_rate = 0.001, image_dimention = 1, categories = 3):
-        super(RESNET, self).__init__()
-        ## Defining networt
-         # Defaulf input image dimention is 1
-         # Default output categories is 3
-        self.pretrained = models.resnet101(pretrained = True)
-        self.pretrained.conv1 = nn.Conv2d(image_dimention, 64, kernel_size = (3, 3), stride=(2,2), padding=(3,3), bias=False)
-        num_ftrs = self.pretrained.fc.in_features
-        self.pretrained.fc = nn.Linear(num_ftrs, categories)
-
-        ## Defining optimizer and loss function
-         # Default loss function is cross entropy
-         # Default optimizer is SGD
-         # Default learning rate is 0.001
-        if criterion:
-            self.criterion = criterion
-        else:
-            self.criterion = nn.CrossEntropyLoss()
-        if optimizer:
-            self.optimizer = optimizer
-        else:
-            self.optimizer = optim.SGD(self.pretrained.parameters(), lr = learning_rate, momentum = 0.9)
-
-    def forward(self, x):
-        x = self.pretrained.forward(x)
-        return x
-
-    def train(self, traindata, valdata = None, numberEpoch = 10, DEBUG = True):
-        trainlen = sum(list(batch[0].shape[0] for batch in traindata))
-        total_batch = len(traindata)
-        ## Loop over the dataset multiple times
-        for epoch in range(numberEpoch):
-            running_corrects = 0.0
-            running_loss     = 0.0
-            if DEBUG:
-                pbar = tqdm(enumerate(traindata, 0), total = total_batch, desc = "Loss 0, Completed", ncols = 800)
-            if not DEBUG:
-                pbar = enumerate(traindata, 0)
-            for count, data in pbar:
-                inputs, labels = data[0], data[1]
-                inputs = inputs.type(torch.FloatTensor)
-                inputs, labels = inputs.to(device), labels.to(device)
-                batch  = inputs.shape[0]
-                ## zero the parameter gradients
-                self.optimizer.zero_grad()
-
-                ## forward + backward + optimize
-                outputs = self.forward(inputs)
-                _, preds = torch.max(outputs, 1)
-                loss = self.criterion(outputs, labels)
-                loss.backward()
-                self.optimizer.step()
-
-                ## Calculating statistics
-                running_loss += loss.item() * batch
-                running_corrects += torch.sum(preds == labels.data)
-
-                ## Showing statistics
-                if DEBUG:
-                    pbar.set_description("Loss %.3f, Completed" %(running_loss/trainlen))
-            if DEBUG:
-                epoch_loss = running_loss/trainlen
-                epoch_acc  = running_corrects/trainlen
-                print('Epoch %d completed, average loss: %.3f, accuracy: %.3f' %(epoch + 1, epoch_loss, epoch_acc))
-
-                if valdata:
-                    val_loss, val_acc = self.evaluate(valdata)
-                    print('Validation, average loss: %.3f, accuracy: %.3f' %(val_loss, val_acc))
-
-    def evaluate(self, testdata):
-        running_corrects = 0.0
-        running_loss     = 0.0
-        testlen = sum(list(batch[0].shape[0] for batch in testdata))
-        for data in testdata:
-            inputs, labels = data[0], data[1]
-            inputs = inputs.type(torch.FloatTensor)
-            inputs, labels = inputs.to(device), labels.to(device)
-            batch  = inputs.shape[0]
-            ## Forward
-            outputs = self.forward(inputs)
-            _, preds = torch.max(outputs, 1)
-            ## Loss and accuracy
-            loss = self.criterion(outputs, labels)
-            running_loss += loss.item() * batch
-            running_corrects += torch.sum(preds == labels.data)
-
-        loss = running_loss/testlen
-        acc  = running_corrects/testlen
-        return loss, acc
-
-    def predict(self, testdata, ID = None):
-        predicted_labels = []
-        for data in testdata:
-            inputs, labels = data[0], data[1]
-            inputs = inputs.type(torch.FloatTensor)
-            inputs, labels = inputs.to(device), labels.to(device)
-            batch  = inputs.shape[0]
-            ## Forward
-            outputs = self.forward(inputs)
-            _, preds = torch.max(outputs, 1)
-            predicted_labels += preds.tolist()
-        if ID:
-            return([ID[label] for label in predicted_labels])
-        return predicted_labels
-
-
-##--- VGG Model ---
-
-class VGGNET(nn.Module):
-    def __init__(self, criterion = None, optimizer = None, learning_rate = 0.001, image_dimention = 1, categories = 3):
-        super(VGGNET, self).__init__()
-        ## Defining networt
-         # Defaulf input image dimention is 1
-         # Default output categories is 3
-        self.pretrained = models.vgg19(pretrained = True)
-        self.pretrained.features[0] = nn.Conv2d(image_dimention, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        num_ftrs = self.pretrained.classifier[6].in_features
-        self.pretrained.classifier[6] = nn.Linear(num_ftrs, categories)
-
-        ## Defining optimizer and loss function
-         # Default loss function is cross entropy
-         # Default optimizer is SGD
-         # Default learning rate is 0.001
-        if criterion:
-            self.criterion = criterion
-        else:
-            self.criterion = nn.CrossEntropyLoss()
-        if optimizer:
-            self.optimizer = optimizer
-        else:
-            self.optimizer = optim.SGD(self.pretrained.parameters(), lr = learning_rate, momentum = 0.9)
-
-    def forward(self, x):
-        x = self.pretrained.forward(x)
-        return x
-
-    def train(self, traindata, valdata = None, numberEpoch = 10, DEBUG = True):
-
-        trainlen = sum(list(batch[0].shape[0] for batch in traindata))
-        total_batch = len(traindata)
-        ## Loop over the dataset multiple times
-        for epoch in tqdm(range(numberEpoch)):
-            running_corrects = 0.0
-            running_loss     = 0.0
-            if DEBUG:
-                pbar = tqdm(enumerate(traindata, 0), total = total_batch, desc = "Loss 0, Completed", ncols = 800)
-            else:
-                pbar = enumerate(traindata, 0)
-            for count, data in pbar:
-                inputs, labels = data[0], data[1]
-                inputs = inputs.type(torch.FloatTensor)
-                inputs, labels = inputs.to(device), labels.to(device)
-                batch  = inputs.shape[0]
-                ## zero the parameter gradients
-                self.optimizer.zero_grad()
-
-                ## forward + backward + optimize
-                outputs = self.forward(inputs)
-                _, preds = torch.max(outputs, 1)
-                loss = self.criterion(outputs, labels)
-                loss.backward()
-                self.optimizer.step()
-
-                ## Calculating statistics
-                running_loss += loss.item() * batch
-                running_corrects += torch.sum(preds == labels.data)
-
-                ## Showing statistics
-                if DEBUG:
-                    pbar.set_description("Loss %.3f, Completed" %(running_loss/trainlen))
-            if DEBUG:
-                epoch_loss = running_loss/trainlen
-                epoch_acc  = running_corrects/trainlen
-                print('Epoch %d completed, average loss: %.3f, accuracy: %.3f' %(epoch + 1, epoch_loss, epoch_acc))
-
-                if valdata:
-                    val_loss, val_acc = self.evaluate(valdata)
-                    print('Validation, average loss: %.3f, accuracy: %.3f' %(val_loss, val_acc))
-
-    def evaluate(self, testdata):
-        running_corrects = 0.0
-        running_loss     = 0.0
-        testlen = sum(list(batch[0].shape[0] for batch in testdata))
-        with torch.no_grad():
-            for data in testdata:
-                inputs, labels = data[0], data[1]
-                inputs = inputs.type(torch.FloatTensor)
-                inputs, labels = inputs.to(device), labels.to(device)
-                batch  = inputs.shape[0]
-                ## Forward
-                outputs = self.forward(inputs)
-                _, preds = torch.max(outputs, 1)
-                ## Loss and accuracy
-                loss = self.criterion(outputs, labels)
-                running_loss += loss.item() * batch
-                running_corrects += torch.sum(preds == labels.data)
-
-        loss = running_loss/testlen
-        acc  = running_corrects/testlen
-        return loss, acc
-
-    def predict(self, testdata, ID = None):
-        predicted_labels = []
-        for data in testdata:
-            inputs, labels = data[0], data[1]
-            inputs = inputs.type(torch.FloatTensor)
-            inputs, labels = inputs.to(device), labels.to(device)
-            batch  = inputs.shape[0]           
-            ## Forward
-            outputs = self.forward(inputs)
-            _, preds = torch.max(outputs, 1)
-            predicted_labels += preds.tolist()
-        if ID:
-            return([ID[label] for label in predicted_labels])
-        return predicted_labels
-
-
-##--- Data loading ---
-
-def get_data(data_path):
+def preprocess_train(trainfile):
     
-    ## Loading images
-    images, target = loader(data_path)
-    ## Train test split
-    train_X, test_X, train_Y, test_Y = data_split(images, target, test_size = 0.3)
-    ## Train loader
-    trainloader = create_batch(train_X, train_Y, batch_size = BATCHSIZE)
-    ## Test loader
-    testloader = create_batch(test_X, test_Y, batch_size = BATCHSIZE)
+    data = pd.read_csv(trainfile)
 
-    return trainloader, testloader
+    X = []
+    y_cat= []
+    
+    for tup in data.itertuples():
+        image = np.array(tup[-2304:]).reshape(48,48).astype(float).tolist()
+        X.append(image)
+        y_cat.append(tup[1])
+    
+    X = np.array(X)
+
+
+    ##--- Convert Gray scale to RGB (by repeating the same channel) ---
+
+    X_rgb = []
+    for item in X:
+          X_rgb.append(np.stack((item,)*3,axis = -1).tolist())
+    X_rgb = np.array(X_rgb)
+
+    dim = (80, 80)
+
+    temp  = X_rgb
+    X = []
+    for i in range(len(temp)):
+        X.append(cv2.resize(temp[i],dim))
+    X = np.array(X) 
+
+    ##--- oversampling ---
+
+    train_dic = {}
+    for i in range(len(y_cat)):
+        try:
+            train_dic[y_cat[i]].append(X[i])
+        except:  
+            train_dic[y_cat[i]] = [X[i]]
+
+
+    m = max([len(train_dic[key]) for key in train_dic.keys()])
+    for key in train_dic.keys():
+        l = (m - len(train_dic[key]))
+        if l!= 0:
+            X = np.concatenate((X, np.array(random.choices(train_dic[key],k=l))))
+            y_cat = np.concatenate((y_cat,np.array([key]*l)),axis=0)
+            
+
+    y_encoded = np.array([convert_array[i] for i in y_cat])
+    y = np.eye(len(set(y_encoded)))[y_encoded]
+
+    return X, y
+
+
+def preprocess_test(testfile):
+    
+    data = pd.read_csv(testfile)
+    
+    X = []
+
+    for tup in data.itertuples():
+        image = np.array(tup[-2304:]).reshape(48,48).astype(float).tolist()
+        X.append(image)
+
+    X = np.array(X)
+
+
+    ##--- Convert Gray scale to RGB (by repeating the same channel) ---
+
+    X_rgb = []
+    for item in X:
+          X_rgb.append(np.stack((item,)*3,axis = -1).tolist())
+    X_rgb = np.array(X_rgb)
+
+    dim = (80, 80)
+
+    temp  = X_rgb
+    X = []
+    for i in range(len(temp)):
+        X.append(cv2.resize(temp[i],dim))
+    X = np.array(X) 
+
+    return X
 
 
 ##--- core functions ---
 
 def train_a_model(trainfile):
+    
+    X, y = preprocess_train(trainfile)
+    
+    ##--- Define model ---
+    
+    base_model = VGG16(include_top=False, input_shape=(80, 80, 3), weights="imagenet") 
+ 
+    base_model.trainable = True
+    
+    model = Sequential([base_model])
+    model.add(Flatten())
+    model.add(BatchNormalization())
+    model.add(Dense(256, activation = "relu"))
+    model.add(Dropout(0.25))
+    model.add(Dense(3, activation = "softmax"))
 
-    trainloader, testloader = get_data(trainfile)
-    # Defining models
-    model_vgg = VGGNET()
-    model_vgg = model_vgg.to(device)
+    optimizer = Adam(learning_rate=0.0001, beta_1=0.9, beta_2=0.999, amsgrad=False)
 
-    model_vgg.train(trainloader, valdata = testloader, numberEpoch = 25, DEBUG = False)
-    return model_vgg
+    model.compile(optimizer = optimizer , loss = "categorical_crossentropy", metrics=["accuracy"])
+
+    rlr = ReduceLROnPlateau(monitor='val_accuracy', factor=0.2, patience= 3, verbose=1, mode='auto', min_lr=0)
+
+    
+    history = model.fit(X, y,
+              batch_size=batch_size,
+              epochs=epochs,
+              shuffle=True, verbose = 2, callbacks=[rlr])
+
+    return model
   
 def test_the_model(model, testfile):
 
-    _, testloader = get_data(testfile)
-    ## XGB
-    prediction = model.predict(testloader)
+    X = preprocess_test(testfile)
+    
+    # making prediction
+    prediction = model.predict(X)
+    
+    final_prediction = [convert_reverse[np.argmax(x)] for x in prediction]
     
     return prediction
-
