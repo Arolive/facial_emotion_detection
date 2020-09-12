@@ -6,19 +6,13 @@
 
 ## To run:
 
-Syntax:
+Call the api using:
 ```
-python aithon_level2.py <train_file_path> <test_file_path>
-```
+import aithon_level2 as api
 
-Example:
-```
-python aithon_level2.py data/aithon2020_level2_traning.csv data/aithon2020_level2_training.csv
 ```
 
 ## Directory layout
-
-TODO : to be organized
 
 - source     : contains the main `.py` file for the classifier
 - notebook   : contains `.ipynb` notebooks for practice
